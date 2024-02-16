@@ -4,3 +4,5 @@ The values are then published to a website on a wifi hotspot where they can be p
 The software is written in Visual Studio with Platformio.
 
 Hardware is a unit based on an ESP32 processor and Adafruit_ADS1115 ADC.
+
+A developermode is added where it generates data as opposed to reading it from the ADC. This is meant for developing connections and frontend applications.

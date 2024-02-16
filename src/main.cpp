@@ -26,13 +26,15 @@ AsyncEventSource events("/events");
 
 // Project variables
 // -----------------------------------------------------------------------------
-static int ADCScale = 1096;
 
-int NPFlowSensor = 0;
-int NPFlowMaxValue = 10000;
-int NPFlowMinValue = 0;
-int NPFlowMinCount = 2165;
-int NPFLowMaxCount = 10631;
+bool DeveloperMode = true;              //true gives simulated values
+int SampleRate = 50;                    //updates in milliseconds
+
+int NPFlowSensor = 0;                   //sensor input number ()
+int NPFlowMaxValue = 10000;             //maximum sensor value
+int NPFlowMinValue = 0;                 //minimum sensor value
+int NPFlowMinCount = 2165;              //count value at 4mA
+int NPFLowMaxCount = 10631;             //count value at 20mA
 
 int NPPressureSensor = 1;
 int NPPressureMaxValue = 60;
@@ -148,7 +150,13 @@ void adc_init(void)
 // Read analog values
 String ReadValue(int sensor, double scale, int offset, int MinCount){
   char JSONValue[10];
-  int16_t RawValue = ads.readADC_SingleEnded(sensor);
+  int16_t RawValue;
+  if (DeveloperMode){
+    RawValue = int(6000 + (3500 * cos(sensor + millis()/float(1000))));
+    }
+  else{
+    RawValue = ads.readADC_SingleEnded(sensor);
+  }
   int16_t NetValue = RawValue - MinCount;
   if (NetValue > -10){
     double Value = offset + (scale * NetValue);
@@ -167,7 +175,6 @@ double CalculateScaling (int minval, int maxval, int mincount, int maxcount){
   return Scale;
 }
 
-
 void setup() {
   Serial.begin(115200); 
   while (!Serial);
@@ -177,7 +184,7 @@ void setup() {
   initWebSocket();
   initWebServer();
 
-  adc_init();
+  if (!DeveloperMode)adc_init();
 
   NPFlowScale = CalculateScaling(NPFlowMinValue, NPFlowMaxValue, NPFlowMinCount, NPFLowMaxCount);
   NPPressureScale = CalculateScaling(NPPressureMinValue, NPPressureMaxValue, NPPressureMinCount, NPPressureMaxCount);
@@ -199,5 +206,5 @@ void loop() {
   ws.textAll(buffer);
   jsonc2w.clear();
 
-  delay (1000);
+  delay (SampleRate);
 }
