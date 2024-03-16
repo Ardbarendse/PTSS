@@ -200,6 +200,7 @@ void loop() {
   jsonc2w ["NPPressure"] = ReadValue(NPPressureSensor, NPPressureScale, NPPressureMinValue, NPPressureMinCount);
   jsonc2w ["HPFlow"] = ReadValue(HPFlowSensor, HPFlowScale, HPFlowMinValue, HPFlowMinCount);
   jsonc2w ["HPPressure"] = ReadValue(HPPressureSensor, HPPressureScale, HPPressureMinValue, HPPressureMinCount);
+  jsonc2w ["Timestamp"] = millis();
 
   serializeJson(jsonc2w, buffer);
   Serial.println(buffer);
