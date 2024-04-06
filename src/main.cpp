@@ -27,8 +27,8 @@ AsyncEventSource events("/events");
 // Project variables
 // -----------------------------------------------------------------------------
 
-bool DeveloperMode = true;              //true gives simulated values
-int SampleRate = 50;                    //updates in milliseconds
+bool DeveloperMode = false;              //true gives simulated values
+int SampleRate = 100;                    //updates in milliseconds
 
 int NPFlowSensor = 0;                   //sensor input number ()
 int NPFlowMaxValue = 10000;             //maximum sensor value
@@ -167,7 +167,7 @@ String ReadValue(int sensor, double scale, int offset, int MinCount){
     return JSONValue;
   }
   else {return "ERROR";}
-  }
+}
 
 double CalculateScaling (int minval, int maxval, int mincount, int maxcount){
   double Scale = (maxval - minval) / (double)(maxcount - mincount);
@@ -193,6 +193,10 @@ void setup() {
 }
 
 void loop() {
+  while (WiFi.softAPgetStationNum()) {
+  Serial.print("Stations connected: ");
+  Serial.println(WiFi.softAPgetStationNum());
+  
   char buffer[2048];
   JsonDocument jsonc2w;
 
@@ -208,4 +212,8 @@ void loop() {
   jsonc2w.clear();
 
   delay (SampleRate);
-}
+  };
+
+  Serial.println("initializing WiFi");
+  initWiFi();
+} 
