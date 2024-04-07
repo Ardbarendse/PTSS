@@ -32,6 +32,8 @@ bool DeveloperMode = true;              //true gives simulated values
 int SampleRate = 1000;                  //updates in milliseconds
 const int CalibrateButton = 39;         //pushbutton to calibrate sensorvalues
 const int ResetButton = 36;
+const int UnitSetButton = 34;
+h4pDebounced flat(UnitSetButton, INPUT_PULLUP, ACTIVE_LOW, 40);
 bool interruptsSet;
 int WifiInitDelay = 10000;              //WifiInit delay when no connection 
 
@@ -204,11 +206,32 @@ void Calibration() {
   esp_restart();
 }
 
+void h4pGlobalEventHandler(const std::string& svc, H4PE_TYPE t, const std::string&){
+  switch(t){
+    H4P_FUNCTION_ADAPTER_GPIO;
+  }
+}
+
+void onGPIO (int pin, int value){
+  if(pin == CalibrateButton){
+    Calibration();
+  }
+  else if (pin == ResetButton){
+    ResetButtonPushed();
+  }
+  else if (pin == UnitSetButton){
+    SetUnit();
+  }  
+}
+
 void ResetButtonPushed() {
   Serial.println("reset button pushed");
   esp_restart();
 }
 
+void SetUnit() {
+  Serial.println("SetUnitButtonPushed");
+}
 void SetupInterrupts() {
   pinMode(CalibrateButton, INPUT_PULLUP);
   pinMode(ResetButton, INPUT_PULLUP);
@@ -239,10 +262,10 @@ void setup() {
 }
 
 void loop() {
-  if (!interruptsSet){
+/*   if (!interruptsSet){
     delay(1000);
     SetupInterrupts();
-  };
+  }; */
 
   while (WiFi.softAPgetStationNum()) {
     Serial.print("Stations connected: ");
