@@ -5,6 +5,7 @@
 #include <SPIFFS.h>
 #include <Adafruit_ADS1X15.h>
 #include <SPI.h>
+#include <Preferences.h>
 
 // WiFi credentials
 // ---------------------------------------------------------------------------
@@ -27,31 +28,37 @@ AsyncEventSource events("/events");
 // Project variables
 // -----------------------------------------------------------------------------
 
-bool DeveloperMode = false;              //true gives simulated values
-int SampleRate = 100;                    //updates in milliseconds
+bool DeveloperMode = true;              //true gives simulated values
+int SampleRate = 1000;                  //updates in milliseconds
+const int CalibrateButton = 39;         //pushbutton to calibrate sensorvalues
+const int ResetButton = 36;
+bool interruptsSet;
+int WifiInitDelay = 10000;              //WifiInit delay when no connection 
+
+Preferences CalibrationStorage;
 
 int NPFlowSensor = 0;                   //sensor input number ()
 int NPFlowMaxValue = 10000;             //maximum sensor value
 int NPFlowMinValue = 0;                 //minimum sensor value
-int NPFlowMinCount = 2165;              //count value at 4mA
+int NPFlowZeroCount;              //count value at 4mA
 int NPFLowMaxCount = 10631;             //count value at 20mA
 
 int NPPressureSensor = 1;
 int NPPressureMaxValue = 60;
-int NPPressureMinValue = -1;
-int NPPressureMinCount = 2171;
+int NPPressureMinValue = 0;
+int NPPressureZeroCount;
 int NPPressureMaxCount = 10661;
 
 int HPFlowSensor = 2;
 int HPFlowMaxValue = 600;
 int HPFlowMinValue = 0;
-int HPFlowMinCount = 2168;
+int HPFlowZeroCount;
 int HPFLowMaxCount = 10645;
 
 int HPPressureSensor = 3;
 int HPPressureMaxValue = 60;
-int HPPressureMinValue = -1;
-int HPPressureMinCount = 2170;
+int HPPressureMinValue = 0;
+int HPPressureZeroCount;
 int HPPressureMaxCount = 10658;
 
 double NPFlowScale;
@@ -175,10 +182,49 @@ double CalculateScaling (int minval, int maxval, int mincount, int maxcount){
   return Scale;
 }
 
+void readCalibrationValues() {
+  CalibrationStorage.begin("CalibrationValues", true);
+  NPFlowZeroCount = CalibrationStorage.getShort("NPFlowZeroCount", 2100);
+  NPPressureZeroCount = CalibrationStorage.getShort("NPPressureZeroCount", 2100);
+  HPFlowZeroCount = CalibrationStorage.getShort("HPFlowZeroCount", 2100);
+  HPPressureZeroCount = CalibrationStorage.getShort("HPPressureZeroCount", 2100);
+  CalibrationStorage.end();
+}
+
+void Calibration() {
+  CalibrationStorage.begin("CalibrationValues", false);
+  Serial.println("calibration button pushed");
+  CalibrationStorage.putShort("NPFlowZeroCount", ads.readADC_SingleEnded(NPFlowSensor));
+  CalibrationStorage.putShort("NPPressureZeroCount", ads.readADC_SingleEnded(NPPressureSensor));
+  CalibrationStorage.putShort("HPFlowZeroCount", ads.readADC_SingleEnded(HPFlowSensor));
+  CalibrationStorage.putShort("HPPressureZeroCount", ads.readADC_SingleEnded(HPPressureSensor));
+  delay(1000);
+  CalibrationStorage.end();
+  delay(1000);
+  esp_restart();
+}
+
+void ResetButtonPushed() {
+  Serial.println("reset button pushed");
+  esp_restart();
+}
+
+void SetupInterrupts() {
+  pinMode(CalibrateButton, INPUT_PULLUP);
+  pinMode(ResetButton, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(CalibrateButton), Calibration, RISING);
+  attachInterrupt(digitalPinToInterrupt(ResetButton), ResetButtonPushed, RISING);
+  interruptsSet = true;
+  Serial.println("interrupts are set");
+}
+
 void setup() {
   Serial.begin(115200); 
   while (!Serial);
 
+  interruptsSet = false;
+
+  readCalibrationValues();
   initSPIFFS();
   initWiFi();
   initWebSocket();
@@ -186,34 +232,40 @@ void setup() {
 
   if (!DeveloperMode)adc_init();
 
-  NPFlowScale = CalculateScaling(NPFlowMinValue, NPFlowMaxValue, NPFlowMinCount, NPFLowMaxCount);
-  NPPressureScale = CalculateScaling(NPPressureMinValue, NPPressureMaxValue, NPPressureMinCount, NPPressureMaxCount);
-  HPFlowScale = CalculateScaling(HPFlowMinValue, HPFlowMaxValue, HPFlowMinCount, HPFLowMaxCount);
-  HPPressureScale = CalculateScaling(HPPressureMinValue, HPPressureMaxValue, HPPressureMinCount, HPPressureMaxCount);
+  NPFlowScale = CalculateScaling(NPFlowMinValue, NPFlowMaxValue, NPFlowZeroCount, NPFLowMaxCount);
+  NPPressureScale = CalculateScaling(NPPressureMinValue, NPPressureMaxValue, NPPressureZeroCount, NPPressureMaxCount);
+  HPFlowScale = CalculateScaling(HPFlowMinValue, HPFlowMaxValue, HPFlowZeroCount, HPFLowMaxCount);
+  HPPressureScale = CalculateScaling(HPPressureMinValue, HPPressureMaxValue, HPPressureZeroCount, HPPressureMaxCount);
 }
 
 void loop() {
+  if (!interruptsSet){
+    delay(1000);
+    SetupInterrupts();
+  };
+
   while (WiFi.softAPgetStationNum()) {
-  Serial.print("Stations connected: ");
-  Serial.println(WiFi.softAPgetStationNum());
-  
-  char buffer[2048];
-  JsonDocument jsonc2w;
+    Serial.print("Stations connected: ");
+    Serial.println(WiFi.softAPgetStationNum());
+    
+    char buffer[2048];
+    JsonDocument jsonc2w;
 
-  jsonc2w ["NPFlow"] = ReadValue(NPFlowSensor, NPFlowScale, NPFlowMinValue, NPFlowMinCount);
-  jsonc2w ["NPPressure"] = ReadValue(NPPressureSensor, NPPressureScale, NPPressureMinValue, NPPressureMinCount);
-  jsonc2w ["HPFlow"] = ReadValue(HPFlowSensor, HPFlowScale, HPFlowMinValue, HPFlowMinCount);
-  jsonc2w ["HPPressure"] = ReadValue(HPPressureSensor, HPPressureScale, HPPressureMinValue, HPPressureMinCount);
-  jsonc2w ["Timestamp"] = millis();
+    jsonc2w ["NPFlow"] = ReadValue(NPFlowSensor, NPFlowScale, NPFlowMinValue, NPFlowZeroCount);
+    jsonc2w ["NPPressure"] = ReadValue(NPPressureSensor, NPPressureScale, NPPressureMinValue, NPPressureZeroCount);
+    jsonc2w ["HPFlow"] = ReadValue(HPFlowSensor, HPFlowScale, HPFlowMinValue, HPFlowZeroCount);
+    jsonc2w ["HPPressure"] = ReadValue(HPPressureSensor, HPPressureScale, HPPressureMinValue, HPPressureZeroCount);
+    jsonc2w ["Timestamp"] = millis();
 
-  serializeJson(jsonc2w, buffer);
-  Serial.println(buffer);
-  ws.textAll(buffer);
-  jsonc2w.clear();
+    serializeJson(jsonc2w, buffer);
+    Serial.println(buffer);
+    ws.textAll(buffer);
+    jsonc2w.clear();
 
-  delay (SampleRate);
+    delay (SampleRate);
   };
 
   Serial.println("initializing WiFi");
   initWiFi();
+  delay(WifiInitDelay);
 } 
