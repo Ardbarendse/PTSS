@@ -6,3 +6,6 @@ The software is written in Visual Studio with Platformio.
 Hardware is a unit based on an ESP32 processor and Adafruit_ADS1115 ADC.
 
 A developermode is added where it generates data as opposed to reading it from the ADC. This is meant for developing connections and frontend applications.
+
+SW1 is used for calibrating the "zero" values of the sensors. This will set all current values to the non-volatile (NVS) memory of the interface, and restart.
+SW2 is a reset button and restarts the interface.
